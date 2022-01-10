@@ -1,0 +1,559 @@
+#!/bin/sh
+#=================================================
+#	System Required: CentOS 5/6/7
+#	Description: 一键架设脚本(DNF)
+#	Version: 1.0.0
+#	Author: Byゝ娃娃
+#	Blog: 爱生活，爱腾讯，爱自由
+#         文件下载由凌云提供，谢谢支持
+#=================================================
+
+#系统检测组件
+function main(){
+echo 'nameserver 114.114.114.114'>>/etc/resolv.conf
+echo "export HISTFILESIZE=0" >> /etc/profile && source /etc/profile
+export W=`getconf LONG_BIT`;centos=`cat /etc/redhat-release`;XT=`cat /etc/redhat-release |grep -Eos '\b[0-9]+\S*\b' |cut -d'.' -f1`;
+export CPU=$(grep 'model name' /proc/cpuinfo |uniq |awk -F : '{print $2}' |sed 's/^[ \t]*//g' |sed 's/ \+/ /g');
+export H=`cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l`;HX=`cat /proc/cpuinfo | grep "core id" |wc -l`;
+export DD=`df -h /`;G=`awk '/MemTotal/{printf("%1.f\n",$2/1024/1024)}' /proc/meminfo`
+export sawpnc=$((10 - $G));
+export Yellow="\033[33m";Blue="\033[36m";Green="\033[32m";Red="\033[31m";Green_b="\033[42;37m";Red_b="\033[41;37m";Font="\033[0m";
+export Success="                                   [${Green}  OK  ${Font}]";Load="       loading..."
+export Info="${Green}[信息]${Font} ";Error="${Red}[错误]${Font}";Tip="${Blue}[注意]${Font} "
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin
+export ssh_url=yiyu233.gitee.io/file/
+export yum_url=a.188rp.cn/Centos/Centos
+export conf=/etc/httpd/conf/httpd.conf
+export xamppd=/opt/lampp/var/mysql/
+export mysqld=/var/lib/mysql/
+export dnfnc=/home/neople/dnfnc
+export author=www
+export sh_ver=1.0.0
+IP=`curl -s ip.twgule.com`
+if [[ -z ${IP} ]];then
+IP=`curl -s ip.cip.cc`
+fi
+rm -rf /root/ssh
+rm -rf /root/dnf
+check_sys
+}
+
+#检查系统
+function check_sys(){
+if [[ -f /etc/redhat-release ]]; then
+	release="CentOS"
+elif cat /etc/issue | grep -q -E -i "debian"; then
+	release="Debian"
+elif cat /etc/issue | grep -q -E -i "ubuntu"; then
+	release="Ubuntu"
+elif cat /etc/issue | grep -q -E -i "centos|red hat|redhat"; then
+	release="CentOS"
+elif cat /proc/version | grep -q -E -i "debian"; then
+	release="Debian"
+elif cat /proc/version | grep -q -E -i "ubuntu"; then
+	release="Ubuntu"
+elif cat /proc/version | grep -q -E -i "centos|red hat|redhat"; then
+	release="CentOS"
+fi
+first_job
+}
+
+#安装环境
+function first_job(){
+if [ "${release}" = "Centos" ]; then
+	echo
+elif [[ "${release}" == "Debian" || "${release}" == "Ubuntu" ||"${W}" == "32" ]]; then
+	echo -e "当前系统版本为：${Red}${release} ${W} 位${Font}"
+	echo "暂不支持该系统安装"
+	echo "请更换 CentOS 64位 系统进行安装"
+	exit	
+fi
+sed -i 's/GSSAPIAuthentication yes/GSSAPIAuthentication no/g' /etc/ssh/sshd_config
+sed -i 's/#UseDNS yes/UseDNS no/g' /etc/ssh/sshd_config
+service sshd restart
+chattr -i /etc/sysconfig/network
+cat << EOF >/etc/sysconfig/i18n
+LANG="en_US.UTF-8"
+SYSFONT="latarcyrheb-sun16"
+EOF
+cat << EOF >/etc/sysconfig/network
+NETWORKING=yes
+NETWORKING_IPV6=yes
+HOSTNAME=${author}
+EOF
+chattr +i /etc/sysconfig/network
+start_menu
+}
+
+#开始菜单
+function start_menu(){
+clear
+echo && echo -e " CentOS一键网络架设脚本(DNF) ${Red}[v${sh_ver}]${Font}
+  -- Byゝ娃娃 | 让便捷成为习惯 --
+  
+————————————安装服务端————————————
+ ${Green}1.${Font} 安装 独立端(官方纯净原生)
+ ${Green}2.${Font} 安装 集成端(xampp集成环境)
+————————————其他小功能————————————
+ ${Green}3.${Font} 安装 PHP环境(httpd 集成端自带,请勿安装!)
+ ${Green}4.${Font} 数据库备份与还原(请注意同端转移)
+ ${Green}5.${Font} 安装 CC防护策略(Beta测试)
+ ${Green}6.${Font} 定时备份数据与清理垃圾
+ ${Green}7.${Font} 高级模式（自定义参数,可对接宝塔）
+ ${Green}8.${Font} 挂载硬盘（挂载硬盘到home目录）
+ ${Green}9.${Font} 查看服务器详细配置
+————————————————————————————————
+ ${Green}0.${Font} 退出安装" && echo
+
+echo -e " 服务器信息:${Green}${HX}核 ${G}G ${release} ${XT} ${W}位${Font}系统，本机IP：${Green}${IP}${Font}"
+echo
+read -p " 请输入数字 [0-9]:" num
+case "${num}" in
+	1)
+	install_sql
+	;;
+	2)
+	install_sql
+	;;
+	3)
+	install_php
+	;;
+	4)
+	back_menu
+	;;
+	5)
+	echo -e " 被CC攻击时请联系Byゝ娃娃，添加防护策略，仅限Centos6.X ！"
+	;;
+	6)
+	cron_menu
+	;;
+	7)
+	install_dnf
+	;;
+	8)
+	curl -O a.188rp.cn/files/auto_disk;sh auto_disk
+	;;
+	9)
+echo "
+================================服务器配置=================================
+  
+系统版本：${centos}   ${W} 位
+
+CPU 型号：${CPU}
+
+CPU个数：${H}个
+
+CPU核心：${HX}核
+
+运行内存：${G}G
+
+===============================硬盘使用情况=================================
+$DD	"
+    echo -n "
+	请按回车键继续。" 
+	read
+	start_menu
+	;;
+	0)
+	exit
+	;;
+	*)
+	echo -e "${Error}:请输入正确数字 [0-9]"
+	sleep 1s
+	start_menu
+	;;
+esac
+}
+
+#安装YUM源
+function install_yum(){
+	echo -e "${Info}正在寻找可用YUM源 ${Load}"
+	rm -rf /etc/yum.repos.d/*
+	curl -o /etc/yum.repos.d/CentOS-Base.repo http://${yum_url}-${XT}.repo >/dev/null 2>&1
+	yum clean all >/dev/null 2>&1
+	yum makecache >/dev/null 2>&1
+	yum install -y wget >/dev/null 2>&1
+	echo -e "${Tip}YUM源安装成功!   ${Success}"
+	sleep 1s
+}
+
+#卸载数据库
+function uninst_sql(){
+	echo -e "${Info}正在清理数据库环境${Load}"
+	yes y | head -1 | yum remove -y mysql mysql-* mariadb >/dev/null 2>&1
+	rm -rf /var/lib/mysql
+	rm -rf /usr/lib64/mysql
+	rm -rf /etc/my.cnf
+	rm -rf /var/log/mysql
+	/opt/lampp/lampp stop >/dev/null 2>&1
+	rm -rf /opt/lampp
+	echo -e "${Tip}数据库清理成功!  ${Success}"
+	sleep 1s
+}
+
+#卸载PHP
+function uninst_php(){
+	echo -e "${Info}正在清理PHP环境   ${Load}"
+	yes y | head -1 | yum remove -y php php-* httpd httpd-* >/dev/null 2>&1
+	yum remove -y php* >/dev/null 2>&1
+	yum remove -y httpd* >/dev/null 2>&1
+	rm -rf /etc/httpd
+	rm -rf /var/www/html;
+	echo -e "${Tip}PHP环境清理成功! ${Success}"
+	sleep 1s
+}
+
+#安装PHP
+function install_php(){
+	echo -e "${Info}正在安装PHP环境   ${Load}"
+	yum install -y php-gd* php php-mysql openssl httpd php-mysql >/dev/null 2>&1
+	sed -i "/Listen 80/a\Listen 735" ${conf} >/dev/null 2>&1
+	sed -i "/#ServerName www.example.com:80/a\ServerName localhost:80" ${conf} >/dev/null 2>&1
+	chkconfig httpd on
+	echo -e "${Tip}PHP环境安装成功! ${Success}"
+	sleep 1s
+	echo -e "${Tip}正在重启PHP       ${Load}"
+	fuser -k -n tcp 80 >/dev/null 2>&1
+	fuser -k -n tcp 735 >/dev/null 2>&1
+	service httpd start
+	echo -e "${Tip}PHP启动完成!     ${Success}"
+}
+
+#安装支持库
+function install_library(){
+	rm -f /var/run/yum.pid
+	yum remove -y libstdc*i686 >/dev/null 2>&1
+	yum install -y glibc*i686 >/dev/null 2>&1
+	yum install -y libstdc*i686 >/dev/null 2>&1
+	yum install -y xulrunner.i686 >/dev/null 2>&1
+	yum install -y libXtst >/dev/null 2>&1
+	yum install -y gcc gcc-c++ make zlib-devel >/dev/null 2>&1
+}
+
+#安装数据库
+function install_sql(){
+	clear
+	echo -e "${Yellow}========================【CentOS一键网络架设脚本(DNF)】========================${Font}" && echo
+	echo -e "${Info}正在处理安装环境!"
+	sleep 1s
+	install_yum
+	uninst_sql
+	uninst_php
+	echo -e "${Info}正在安装数据库    ${Load}"
+	echo -e "${Tip}这里请耐心等待,1-10分钟,与服务器网速的快慢相关！"
+if [ "${num}" = "1" ] ; then
+	if [[ "${XT}" == "5" || "${XT}" == "6" ]]; then
+	fuser -k -n tcp 3306 >/dev/null 2>&1
+	yum install -y mysql >/dev/null 2>&1
+	yum install -y mysql-server >/dev/null 2>&1
+	yum install -y mysql-devel >/dev/null 2>&1
+	chkconfig mysqld on
+	elif [ "${XT}" = "7" ] ; then
+	fuser -k -n tcp 3306 >/dev/null 2>&1
+	yum install -y MariaDB-client >/dev/null 2>&1
+	yum install -y MariaDB-server >/dev/null 2>&1
+	yum install -y MariaDB-devel >/dev/null 2>&1
+	chkconfig mysqld on
+	fi
+	install_library
+	wget --no-check-certificate -q -O /MySQL.tar.gz https://${ssh_url}/MySQL.tar.gz
+	service mysqld stop
+	rm -rf ${mysqld}*
+	cd /;tar -zxvf MySQL.tar.gz >/dev/null 2>&1
+	sed -i "s/symbolic-links=0/symbolic-links=0\ndefault-character-set=latin1\ndefault-storage-engine=InnoDB\nskip-name-resolve\nmax_connections=10000\nmax_connect_errors=1000\nmax_allowed_packet = 20M/g" /etc/my.cnf
+	chmod -R 0777 ${mysqld}
+	chown -R mysql.mysql ${mysqld}
+	service mysqld start
+	mysql_upgrade -u'game' -p'uu5!^%jg' -h'127.0.0.1' >/dev/null 2>&1
+elif [ "${num}" = "2" ] ; then
+	install_library
+	wget --no-check-certificate -q -O /XAMPP.tar.gz https://${ssh_url}/XAMPP.tar.gz
+	rm -rf ${mysqld}*
+	fuser -k -n tcp 3306 >/dev/null 2>&1
+	cd /;tar -zxvf XAMPP.tar.gz >/dev/null 2>&1
+	cd /opt/lampp;./lampp start
+fi
+	echo -e "${Tip}数据库启动完成!  ${Success}"
+	sleep 1s
+	rm -rf /MySQL.tar.gz
+	rm -rf /XAMPP.tar.gz
+	install_dnf
+}
+
+#安装服务端
+function install_dnf(){
+	echo -e "${Info}正在安装服务端    ${Load}"
+	wget --no-check-certificate -q -O /DNFServer.tar.gz https://${ssh_url}/DnfServer.tar.gz
+	cd /;tar -zxvf DNFServer.tar.gz >/dev/null 2>&1
+	cd /home/neople
+	read -p "请输入你的转发IP(默认:${IP}): " udpip
+	UDPIP=${udpip}
+	if [[ -z ${udpip} ]];then
+	UDPIP=${IP}
+	fi
+if [[ "${num}" == "1" || "${num}" == "2" ]]; then
+	MYSQL=127.0.0.1
+	MYSQLNAME=game
+	PASSWD=uu5!^%jg
+	PWDKey=20e35501e56fcedbe8b10c1f8bc3595be8b10c1f8bc3595b
+elif [ "${num}" = "7" ] ; then
+	install_library
+	read -p "请输入你的数据库IP: " mysql
+	MYSQL=${mysql}
+	read -p "请输入你的数据库用户名: " mysqlname
+	MYSQLNAME=${mysqlname}
+	read -p "请输入明文密码: " passwd
+	PASSWD=${passwd}
+	read -p "请输入密文密码: " pwdkey
+	PWDKey=${pwdkey}
+fi
+	sed -i "s/Public IP/${IP}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/MySQL IP/${MYSQL}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/MySQL Name/${MYSQLNAME}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/MySQL PWD/${PASSWD}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/MySQL Key/${PWDKey}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/stun_ip= UDP IP/stun_ip= ${UDPIP}/g" `find . -type f -name "*.cfg"` >/dev/null 2>&1
+	sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" /etc/sysconfig/selinux
+	sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config
+	setenforce 0 >/dev/null 2>&1
+	echo -e "${Tip}服务端安装完成!  ${Success}"
+	sleep 1s
+	rm -rf /DNFServer.tar.gz
+	if ((${sawpnc} > 1)); then
+	echo -e "${Info}开始创建虚拟内存"
+	sleep 1s
+	echo -e "${Info}根据运行内存自动添加，预计1-10分钟，最慢30分钟左右。"
+	dd if=/dev/zero of=${dnfnc} bs=${sawpnc}M count=1000
+	mkswap ${dnfnc} >/dev/null 2>&1
+	swapon ${dnfnc} >/dev/null 2>&1
+	echo '/home/neople/dnfnc swap swap defaults 0 0' >> /etc/fstab
+	sed -i 's/swapoff -a/#swapoff -a/g' /etc/rc.d/rc.local
+	echo -e "${Tip}创建虚拟内存完成!${Success}"
+	elif ((${sawpnc} <= 1)); then
+	echo -e "${Info}系统检测运行内≤8G，无需要添加虚拟内存。"
+	sleep 1s
+	fi
+	echo -e "${Info}开始关闭防火墙    ${Load}"
+if [ "${XT}" = "5" ] ; then
+	service iptables stop >/dev/null 2>&1
+	chkconfig iptables off >/dev/null 2>&1
+elif [ "${XT}" = "6" ] ; then
+	service iptables stop >/dev/null 2>&1
+	chkconfig iptables off >/dev/null 2>&1
+	iptables -t nat -A PREROUTING -p tcp --dport 3307 -j REDIRECT --to-port 3306
+	service iptables save >/dev/null 2>&1
+	service iptables restart >/dev/null 2>&1
+elif [ "${XT}" = "7" ] ; then
+	systemctl disable firewalld >/dev/null 2>&1
+	systemctl stop firewalld >/dev/null 2>&1
+	systemctl disable firewalld.service >/dev/null 2>&1
+	systemctl stop firewalld.service >/dev/null 2>&1
+fi
+	echo -e "${Tip}防火墙关闭完成!  ${Success}"
+	echo 1 > /proc/sys/vm/drop_caches
+case ${num} in
+	1)
+	install_php
+	;;
+	2)
+	;;
+	*)
+	;;
+esac
+	log_menu
+}
+
+
+#数据库备份与恢复
+function back_menu() {
+clear
+echo && echo -e " CentOS一键网络架设脚本(DNF) ${Red}[v${sh_ver}]${Font}
+  -- Byゝ娃娃 | 让便捷成为习惯 --
+  
+————————————备份与恢复————————————
+
+ ${Green}1.${Font} 备份 独立端数据库(数据库目录:${mysqld})
+ ${Green}2.${Font} 还原 独立端数据库(数据库目录:${mysqld})
+ ${Green}3.${Font} 备份 集成端数据库(数据库目录:${xamppd})
+ ${Green}4.${Font} 还原 集成端数据库(数据库目录:${xamppd})
+
+
+ ${Green}5.${Font} 退出备份
+——————————————————————————————————
+ ${Green}0.${Font} 返回主菜单" && echo
+
+echo -e " 服务器信息:${Green}${HX}核 ${G}G ${release} ${XT} ${W}位${Font}系统，本机IP：${Green}${IP}${Font}
+===============================硬盘使用情况=================================
+$DD	"
+echo
+read -p " 请输入数字 [0-5]:" num
+case "${num}" in
+	1)
+	echo -e "${Tip}文件MySQL.tar.gz备份在root目录！请按回车键继续！" 
+	read
+	tar -zcvf /root/MySQL.tar.gz ${mysqld}
+	echo
+	echo
+	echo -e "${Tip}数据库备份完成!文件MySQL.tar.gz在root目录！"
+	;;
+	2)
+	echo -e "${Tip}请把MySQL.tar.gz上传到根目录！请按回车键继续！" 
+	read
+	service mysqld stop && rm -rf ${mysqld}* && cd /;tar -zxvf *.tar.gz -C / && service mysqld restart && rm -rf /*.tar.gz
+	echo
+	echo
+	echo -e "${Tip}数据库还原完成!已清理临时文件！"
+	;;
+	3)
+    echo -e "${Tip}文件MySQL.tar.gz备份在root目录！请按回车键继续！" 
+    read
+	tar -zcvf /root/MySQL.tar.gz ${xamppd}
+	echo
+	echo
+	echo -e "${Tip}数据库备份完成!文件MySQL.tar.gz在root目录！"
+	;;
+	4)
+	echo -e "${Tip}请把MySQL.tar.gz上传到根目录！请按回车键继续！" 
+	read
+	rm -rf ${xamppd} && cd /;tar -zxvf *.tar.gz -C / && rm -rf /*.tar.gz
+	echo
+	echo
+	echo -e "${Tip}数据库还原完成!正在重启服务器！"
+	reboot
+	;;
+	5)
+	exit
+	;;
+	0)
+	start_menu
+	;;
+	*)
+	echo -e "${Error}:请输入正确数字 [0-5]"
+	sleep 1s
+	back_menu
+	;;
+esac
+}
+
+#定时备份数据与清理垃圾
+function cron_menu() {
+clear
+yum install -y crontabs >/dev/null 2>&1 && chkconfig crond on
+echo && echo -e " CentOS一键网络架设脚本(DNF) ${Red}[v${sh_ver}]${Font}
+  -- Byゝ娃娃 | 让便捷成为习惯 --
+  
+————————————定时任务—————————————
+
+ ${Green}1.${Font} 自动备份 独立端(数据库目录:${mysqld})
+ ${Green}2.${Font} 自动备份 集成端(数据库目录:${xamppd})
+ ${Green}3.${Font} 手动清理 服务端所有垃圾日志
+
+——————————————————————————————————
+ ${Green}4.${Font} 修复公会菜单管理(请先开启自动备份)
+ ${Green}5.${Font} 在线重启拍卖行与金币寄售
+——————————————————————————————————
+ ${Green}0.${Font} 返回主菜单" && echo
+
+echo -e " 服务器信息:${Green}${HX}核 ${G}G ${release} ${XT} ${W}位${Font}系统，本机IP：${Green}${IP}${Font}"
+echo
+read -p " 请输入数字 [0-5]:" num
+case "${num}" in
+1)
+rm -rf /root/MySQL
+mkdir /root/MySQL
+echo ``da=``\`date +%H%M\``` >/etc/cron.hourly/back
+cat << EOF >>/etc/cron.hourly/back
+tar -zcvf /root/MySQL/${IP}_\${da}.tar.gz ${mysqld}
+find /home/ \( -name "core.*" \) -type f -print -exec rm -f {} \;
+EOF
+read -p " 请输入备份时间间隔 [1-23]小时 (默认:1小时):" hour
+if [[ -z ${hour} ]];then
+hour=1
+fi
+cat << EOF >/etc/crontab
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+HOME=/
+1 */${hour} * * * root run-parts /etc/cron.hourly
+EOF
+chmod -R a+x /etc/cron.hourly
+service crond restart
+;;
+2)
+rm -rf /root/MySQL
+mkdir /root/MySQL
+echo ``da=``\`date +%H%M\``` >/etc/cron.hourly/back
+cat << EOF >>/etc/cron.hourly/back
+tar -zcvf /root/MySQL/${IP}_\${da}.tar.gz ${xamppd}
+find /home/ \( -name "core.*" \) -type f -print -exec rm -f {} \;
+EOF
+read -p " 请输入备份时间间隔 [1-23]小时 (默认:1小时):" hour
+if [[ -z ${hour} ]];then
+hour=1
+fi
+cat << EOF >/etc/crontab
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+HOME=/
+0 */${hour} * * * root run-parts /etc/cron.hourly
+EOF
+chmod -R a+x /etc/cron.hourly
+service crond restart
+;;
+3)
+find /home/ \( -name "*.log" -o -name "*.pid"  -o -name "core.*"  -o -name "*.MMAP" \) -type f -print -exec rm -f {} \;
+;;
+4)
+echo "0 6 * * * /home/neople/guild/guild_restart" >> /etc/crontab
+service crond restart
+;;
+5)
+/home/neople/auction/auction_restart
+;;
+0)
+start_menu
+;;
+*)
+echo -e "${Error}:请输入正确数字 [0-5]"
+sleep 1s
+back_menu
+;;
+esac
+}
+
+#信息日志
+function log_menu() {
+rm -rf /root/dnf
+rm -rf /*.tar.gz
+cd
+sleep 1s
+rm -rf /etc/localtime
+ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+date -s "`curl --silent http://cs5.puyun.vip/time.php`" >/dev/null 2>&1
+clear
+echo
+echo -e "${Yellow}===========================【Byゝ娃々娃的一键端】=============================${Font}
+${Blue}自制一键综合脚本，助您成就懒人之梦！"
+case ${num} in
+1)
+echo -e "独立端PHP配置目录：/var/www/html    端口修改位置：$conf"
+;;
+2)
+echo -e "集成端PHP配置目录：/opt/lampp/htdocs    端口修改位置：/opt/lampp/etc/httpd.conf"
+;;
+*)
+;;
+esac
+echo
+echo -e "数据库默认帐号：game           PHP默认端口号：735 和80
+数据库默认密码：uu5!^%jg
+启动命令为cd;./stop;./stop;./run
+停止命令为cd;./stop;./stop;
+
+当前系统时间为: `date "+%Y-%m-%d %H:%M:%S"`  注意：时间如果不正确请自行修改！${Font}
+${Yellow}==============================================================================${Font}" && echo
+reboot
+}
+main
